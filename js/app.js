@@ -1,87 +1,396 @@
-const App={
-tabs:[{id:'inquiries',l:'询价',b:()=>Store.getInquiries().length,r:'*'},{id:'products',l:'产品',b:()=>Store.getProducts().length,r:'*'},{id:'customers',l:'客户',b:()=>Store.getCustomers().length,r:'*'},{id:'general',l:'常规申请',b:()=>App._gaTotal(),r:'*'},{id:'settings',l:'设置',b:null,r:'admin'}],
-currentTab:'inquiries',
-init(){if(!Store.isLoggedIn())return this.showLogin();this.renderShell();this.switchTab('inquiries');},
-showLogin(){document.getElementById('app').innerHTML='<div class="login-wrapper"><div class="login-card"><h1>奥图CRM</h1><form onsubmit="App.doLogin(event)"><div class="form-group"><label>用户名</label><input class="form-control" id="login-user"></div><div class="form-group"><label>密码</label><input class="form-control" type="password" id="login-pass"></div><div id="login-err" style="color:red;font-size:12px;margin-bottom:8px"></div><button class="btn btn-primary" style="width:100%;margin-top:8px">登录</button></form><p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">还没有账号？<a href="#" onclick="App.showRegister();return false" style="color:var(--primary)">注册新账号</a></p></div></div>';},
-doLogin(e){e.preventDefault();const u=document.getElementById('login-user').value.trim(),p=document.getElementById('login-pass').value.trim(),user=Store.login(u,p);if(user)this.init();else document.getElementById('login-err').textContent='用户名或密码错误';},
-showRegister(){document.getElementById('app').innerHTML='<div class="login-wrapper"><div class="login-card"><h1>注册账号</h1><form onsubmit="App.doRegister(event)"><div class="form-group"><label>用户名</label><input class="form-control" id="reg-user" placeholder="用于登录"></div><div class="form-group"><label>姓名</label><input class="form-control" id="reg-name" placeholder="你的真实姓名"></div><div class="form-group"><label>密码</label><input class="form-control" type="password" id="reg-pass"></div><div class="form-group"><label>确认密码</label><input class="form-control" type="password" id="reg-pass2"></div><div id="reg-err" style="color:red;font-size:12px;margin-bottom:8px"></div><button class="btn btn-primary" style="width:100%;margin-top:8px">注册</button></form><p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">已有账号？<a href="#" onclick="App.showLogin();return false" style="color:var(--primary)">返回登录</a></p></div></div>';},
-doRegister(e){e.preventDefault();const user=document.getElementById('reg-user').value.trim(),name=document.getElementById('reg-name').value.trim(),pass=document.getElementById('reg-pass').value,pass2=document.getElementById('reg-pass2').value;const err=document.getElementById('reg-err');if(!user||!pass){err.textContent='请填写用户名和密码';return;}if(pass!==pass2){err.textContent='两次密码不一致';return;}if(pass.length<4){err.textContent='密码至少4位';return;}const result=Store.register(user,pass,name);if(!result){err.textContent='用户名已存在';return;}this.toast('注册成功，请登录');this.showLogin();},
-renderShell(){const u=Store.currentUser(),rl=Store.ROLE_LABELS[u.role]||u.role;document.getElementById('app').innerHTML='<nav class="navbar"><div class="nav-left"><div class="nav-brand">奥图CRM</div><div class="nav-tabs" id="tabs"></div></div><div class="nav-right"><div class="noti-bell" onclick="App.showNotifications()">🔔<span class="noti-badge" id="noti-badge"></span></div><span class="nav-user">'+rl+' '+u.name+'</span><button class="btn-icon" onclick="App.logout()">X</button></div></nav><div id="noti-panel" class="noti-panel"></div><main id="main" class="main-content"></main>';this.renderTabs();this.updateNotiBadge();},
-renderTabs(){const u=Store.currentUser();document.getElementById('tabs').innerHTML=this.tabs.filter(t=>t.r==='*'||u.role==='admin').map(t=>'<button class="tab '+(t.id===this.currentTab?'active':'')+'" onclick="App.switchTab(\''+t.id+'\')">'+t.l+(t.b?'<span class="badge">'+t.b()+'</span>':'')+'</button>').join('');},
-switchTab(id){this.currentTab=id;this.renderTabs();const m={inquiries:'IQ',products:'Prod',customers:'Cust',general:'GA',settings:'Set'};document.getElementById('main').innerHTML=this['render'+m[id]+'Page']();if(id==='general')setTimeout(()=>this._fga(),50);},
-logout(){Store.logout();location.reload();},
-fMoney(n){return n!=null?'¥'+Number(n).toFixed(2):'-';},
-fDate(ts){if(!ts)return'-';const d=new Date(ts);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');},
-fTime(ts){if(!ts)return'-';const d=new Date(ts);return this.fDate(ts)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');},
-sTag(s){const m={'待审核':'tag-warning','审核中':'tag-info','已通过':'tag-success','已驳回':'tag-danger'};return'<span class="tag '+(m[s]||'tag-primary')+'">'+(s||'-')+'</span>';},
-showNotifications(){const list=Store.getMyNotifications();const panel=document.getElementById('noti-panel');panel.innerHTML='<div class="noti-header"><strong>通知</strong><button class="btn-icon" onclick="document.getElementById(\'noti-panel\').style.display=\'none\'">X</button></div><div class="noti-list">'+(list.length===0?'<div class="empty">暂无通知</div>':list.map(n=>'<div class="noti-item'+(n.read?'':' unread')+'" onclick="App.goToNoti(\''+n.id+'\')"><div class="noti-title">'+n.title+'</div><div class="noti-body">'+n.body+'</div><div class="noti-time">'+this.fTime(n.created_at)+'</div></div>').join(''))+'</div><button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="App.clearAllNoti()">清空所有通知</button>';panel.style.display='block';},
-goToNoti(id){const n=Store.getNotifications().find(x=>x.id===id);if(!n)return;const list=Store.getNotifications();const idx=list.findIndex(x=>x.id===id);if(idx>=0){list[idx].read=true;Store._set('notifications',list);}this.updateNotiBadge();document.getElementById('noti-panel').style.display='none';if(n.link_tab)this.switchTab(n.link_tab);if(n.link_id)setTimeout(()=>{const el=document.querySelector('[data-id="'+n.link_id+'"]');if(el)el.scrollIntoView({behavior:'smooth'});},100);},
-clearAllNoti(){Store._set('notifications',[]);this.updateNotiBadge();document.getElementById('noti-panel').innerHTML='<div class="empty">暂无通知</div>';},
-updateNotiBadge(){const c=Store.unreadCount();const b=document.getElementById('noti-badge');if(b)b.textContent=c>0?c:'';},
-toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2000);},
-renderIQPage(){const l=Store.filterMine(Store.getInquiries(),'inquiries');return'<div class="card"><div class="card-header"><h3>询价表 ('+l.length+')</h3><div class="card-actions"><select class="form-control" id="iq-filter" onchange="App._iqFilter()"><option value="">全部</option><option value="跟进中">跟进中</option><option value="已成交">已成交</option><option value="已放弃">已放弃</option></select><button class="btn btn-primary" onclick="App._iqForm()">+ 新增</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>编号</th><th>销售员</th><th>日期</th><th>来源</th><th>渠道</th><th>国家</th><th>状态</th><th>产品</th><th>总金额</th><th>客户</th><th>操作</th></tr></thead><tbody id="iq-tbody">'+this._iqRows(l)+'</tbody></table></div></div>';},
-_iqRows(l){return l.length?l.map(r=>'<tr data-id="'+r.id+'"><td><strong>'+(r.inquiry_no||'-')+'</strong></td><td>'+(r.salesperson||'-')+'</td><td>'+this.fDate(r.inquiry_date)+'</td><td>'+(r.source||'-')+'</td><td>'+(r.channel||'-')+'</td><td>'+(r.country||'-')+'</td><td>'+this.sTag(r.status)+'</td><td>'+(r.products?r.products.length:0)+'</td><td>'+this.fMoney(r.total_amount)+'</td><td>'+(r.customer_name||'-')+'</td><td><button class="btn btn-sm" onclick="App._iqForm(\''+r.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="App._iqDel(\''+r.id+'\')">删除</button></td></tr>').join(''):'<tr><td colspan="11" class="empty">暂无数据</td></tr>';},
-_iqFilter(){const f=document.getElementById('iq-filter').value;const all=Store.filterMine(Store.getInquiries(),'inquiries');const l=f?all.filter(r=>r.status===f):all;document.getElementById('iq-tbody').innerHTML=this._iqRows(l);},
-_iqForm(id){const r=id?Store.getInquiries().find(x=>x.id===id):{};const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML='<div class="modal"><div class="modal-header"><h3>'+(id?'编辑':'新增')+'询价</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="row"><div class="form-group"><label>询价单号</label><input class="form-control" id="iq-no" value="'+(r.inquiry_no||'')+'"></div><div class="form-group"><label>销售员</label><input class="form-control" id="iq-sales" value="'+(r.salesperson||'')+'"></div></div><div class="row"><div class="form-group"><label>询价日期</label><input class="form-control" type="date" id="iq-date" value="'+(r.inquiry_date||'')+'"></div><div class="form-group"><label>状态</label><select class="form-control" id="iq-status"><option>跟进中</option><option>已成交</option><option>已放弃</option></select></div></div><div class="row"><div class="form-group"><label>来源</label><input class="form-control" id="iq-source" value="'+(r.source||'')+'"></div><div class="form-group"><label>渠道</label><input class="form-control" id="iq-channel" value="'+(r.channel||'')+'"></div></div><div class="form-group"><label>国家</label><input class="form-control" id="iq-country" value="'+(r.country||'')+'"></div><div class="form-group"><label>客户名称</label>'+this._cs('iq-customer',r.customer_name)+'</div><h4>📦 产品明细 <button class="btn btn-sm btn-outline" onclick="App._iqRow()">+1</button> <button class="btn btn-sm btn-outline" onclick="App._iqPaste()">📋 批量粘贴</button></h4><div id="iq-rows">'+(r.products?r.products.map(p=>this._iqRowHTML(p)).join(''):'')+'</div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._iqSave(\''+(id||'')+'\')">保存</button></div></div>';document.body.appendChild(m);if(r.status)document.getElementById('iq-status').value=r.status;},
-_iqRow(){document.getElementById('iq-rows').insertAdjacentHTML('beforeend',this._iqRowHTML({}));},
-_iqRowHTML(p){return'<div class="line-item"><div class="form-group"><label>品牌</label>'+this._pbr('brand-'+Date.now(),p.brand)+'</div><div class="form-group"><label>型号</label>'+this._pmdl('model-'+Date.now(),p.model)+'</div><div class="form-group"><label>数量</label><input class="form-control" type="number" value="'+(p.quantity||'')+'"></div><div class="form-group"><label>单价</label><input class="form-control" type="number" step="0.01" value="'+(p.unit_price||'')+'"></div><div class="form-group"><label>货期</label><input class="form-control" value="'+(p.delivery||'')+'"></div><button class="btn-icon" onclick="this.parentElement.remove()">X</button></div>';},
-_iqPaste(){if(document.getElementById('paste-text'))return;const h='<div class="modal-backdrop" onclick="if(event.target===this)App.closePasteModal()"><div class="modal" style="max-width:500px"><div class="modal-header"><h3>📋 批量粘贴</h3><button class="btn-icon" onclick="App.closePasteModal()">X</button></div><div class="modal-body"><textarea id="paste-text" style="width:100%;height:200px;font-family:monospace;font-size:12px" placeholder="每行一个产品，格式：品牌\\t型号\\t数量\\t单价\\t货期"></textarea></div><div class="modal-footer"><button class="btn btn-outline" onclick="App.closePasteModal()">取消</button><button class="btn btn-primary" onclick="App._iqParse()">粘贴</button></div></div></div>';document.body.insertAdjacentHTML('beforeend',h);},
-_iqParse(){const t=document.getElementById('paste-text').value;if(!t)return;const lines=t.trim().split('\\n');const rows=document.getElementById('iq-rows');lines.forEach(line=>{const p=line.split('\\t');if(p[0])rows.insertAdjacentHTML('beforeend',this._iqRowHTML({brand:p[0],model:p[1],quantity:p[2],unit_price:p[3],delivery:p[4]}));});this.closePasteModal();},
-closePasteModal(){document.querySelectorAll('.modal-backdrop,.modal[style*="max-width:500px"]').forEach(e=>e.remove());},
-_iqSave(id){const rows=document.querySelectorAll('#iq-rows .line-item');const products=[];rows.forEach(r=>{const inputs=r.querySelectorAll('input');products.push({brand:inputs[0]?.value||'',model:inputs[1]?.value||'',quantity:inputs[2]?.value||'',unit_price:inputs[3]?.value||'',delivery:inputs[4]?.value||''});});const total=products.reduce((s,p)=>s+(Number(p.unit_price)*Number(p.quantity)||0),0);const data={inquiry_no:document.getElementById('iq-no').value,salesperson:document.getElementById('iq-sales').value,inquiry_date:document.getElementById('iq-date').value,status:document.getElementById('iq-status').value,source:document.getElementById('iq-source').value,channel:document.getElementById('iq-channel').value,country:document.getElementById('iq-country').value,customer_name:document.getElementById('iq-customer').value,products,total_amount:total};if(id)Store.updateInquiry(id,data);else Store.saveInquiry(data);document.querySelector('.modal-backdrop').remove();this.switchTab('inquiries');this.toast('已保存');},
-_iqDel(id){if(confirm('确定删除？')){Store.deleteInquiry(id);this.switchTab('inquiries');this.toast('已删除');}},
-_pbr(id,val){const prods=Store.getProducts();const brands=[...new Set(prods.map(p=>p.brand))];return'<input class="form-control" list="'+id+'-list" id="'+id+'" value="'+(val||'')+'" placeholder="搜索品牌..." autocomplete="off"><datalist id="'+id+'-list">'+brands.map(b=>'<option value="'+b+'">'+b+'</option>').join('')+'</datalist>';},
-_pmdl(id,val){const prods=Store.getProducts();const models=[...new Set(prods.map(p=>p.model))];return'<input class="form-control" list="'+id+'-list" id="'+id+'" value="'+(val||'')+'" placeholder="搜索型号..." autocomplete="off"><datalist id="'+id+'-list">'+models.map(m=>'<option value="'+m+'">'+m+'</option>').join('')+'</datalist>';},
-_cs(id,val){const custs=Store.getCustomers();return'<input class="form-control" list="'+id+'-list" id="'+id+'" value="'+(val||'')+'" placeholder="搜索客户..." autocomplete="off"><datalist id="'+id+'-list">'+custs.map(c=>'<option value="'+c.customer_name+'">'+c.customer_name+'</option>').join('')+'</datalist>';},
-renderProdPage(){const l=Store.getProducts();return'<div class="card"><div class="card-header"><h3>产品档案 ('+l.length+')</h3><div class="card-actions"><button class="btn btn-outline" onclick="App._prodImport()">📥 批量导入</button><button class="btn btn-primary" onclick="App._prodForm()">+ 新增</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>编码</th><th>品牌</th><th>型号</th><th>类别</th><th>系列</th><th>单价</th><th>操作</th></tr></thead><tbody>'+(l.length?l.map(p=>'<tr data-id="'+p.id+'"><td><strong>'+(p.product_code||'-')+'</strong></td><td>'+(p.brand||'-')+'</td><td>'+(p.model||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.series||'-')+'</td><td>'+this.fMoney(p.price)+'</td><td><button class="btn btn-sm" onclick="App._prodForm(\''+p.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="App._prodDel(\''+p.id+'\')">删除</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">暂无数据</td></tr>')+'</tbody></table></div></div>';},
-_prodForm(id){const p=id?Store.getProducts().find(x=>x.id===id):{};const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML='<div class="modal"><div class="modal-header"><h3>'+(id?'编辑':'新增')+'产品</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="row"><div class="form-group"><label>产品编码</label><input class="form-control" id="prod-code" value="'+(p.product_code||'')+'"></div><div class="form-group"><label>品牌</label><input class="form-control" id="prod-brand" value="'+(p.brand||'')+'"></div></div><div class="row"><div class="form-group"><label>型号</label><input class="form-control" id="prod-model" value="'+(p.model||'')+'"></div><div class="form-group"><label>类别</label><input class="form-control" id="prod-cat" value="'+(p.category||'')+'"></div></div><div class="row"><div class="form-group"><label>系列</label><input class="form-control" id="prod-series" value="'+(p.series||'')+'"></div><div class="form-group"><label>单价</label><input class="form-control" type="number" step="0.01" id="prod-price" value="'+(p.price||'')+'"></div></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._prodSave(\''+(id||'')+'\')">保存</button></div></div>';document.body.appendChild(m);},
-_prodSave(id){const code=document.getElementById('prod-code').value.trim();const data={product_code:code||this._prodCode(),brand:document.getElementById('prod-brand').value,model:document.getElementById('prod-model').value,category:document.getElementById('prod-cat').value,series:document.getElementById('prod-series').value,price:document.getElementById('prod-price').value};if(id)Store.updateProduct(id,data);else Store.saveProduct(data);document.querySelector('.modal-backdrop').remove();this.switchTab('products');this.toast('已保存');},
-_prodCode(){const prods=Store.getProducts();let max=0;prods.forEach(p=>{const m=p.product_code?.match(/PROD-(\d+)/);if(m)max=Math.max(max,parseInt(m[1]));});return'PROD-'+String(max+1).padStart(4,'0');},
-_prodImport(){if(document.getElementById('paste-text'))return;const h='<div class="modal-backdrop" onclick="if(event.target===this)App.closePasteModal()"><div class="modal" style="max-width:500px"><div class="modal-header"><h3>📥 批量导入产品</h3><button class="btn-icon" onclick="App.closePasteModal()">X</button></div><div class="modal-body"><textarea id="paste-text" style="width:100%;height:200px;font-family:monospace;font-size:12px" placeholder="每行一个产品，格式：品牌&#9;型号&#9;类别&#9;系列&#9;单价&#10;每行编码会自动生成"></textarea></div><div class="modal-footer"><button class="btn btn-outline" onclick="App.closePasteModal()">取消</button><button class="btn btn-primary" onclick="App._prodParse()">导入</button></div></div></div>';document.body.insertAdjacentHTML('beforeend',h);},
-_prodParse(){const t=document.getElementById('paste-text').value;if(!t)return;const lines=t.trim().split('\n');let count=0;lines.forEach(line=>{const p=line.split(/\t|,/);if(p[0]){Store.saveProduct({product_code:this._prodCode(),brand:p[0].trim()||'',model:p[1]?.trim()||'',category:p[2]?.trim()||'',series:p[3]?.trim()||'',price:p[4]?.trim()||''});count++;}});this.closePasteModal();this.switchTab('products');this.toast('已导入 '+count+' 个产品');},
-_prodDel(id){if(confirm('确定删除？')){Store.deleteProduct(id);this.switchTab('products');this.toast('已删除');}},
-renderCustPage(){const l=Store.getCustomers();return'<div class="card"><div class="card-header"><h3>客户信息 ('+l.length+')</h3><button class="btn btn-primary" onclick="App._custForm()">+ 新增</button></div><div class="table-wrap"><table class="table"><thead><tr><th>客户名称</th><th>公司</th><th>联系方式</th><th>类型</th><th>议价风格</th><th>操作</th></tr></thead><tbody>'+(l.length?l.map(c=>'<tr data-id="'+c.id+'"><td><strong>'+(c.customer_name||'-')+'</strong></td><td>'+(c.company||'-')+'</td><td>'+(c.contact||'-')+'</td><td>'+(c.customer_type||'-')+'</td><td>'+(c.bargaining_style||'-')+'</td><td><button class="btn btn-sm" onclick="App._custForm(\''+c.id+'\')">编辑</button> <button class="btn btn-sm btn-danger" onclick="App._custDel(\''+c.id+'\')">删除</button></td></tr>').join(''):'<tr><td colspan="6" class="empty">暂无数据</td></tr>')+'</tbody></table></div></div>';},
-_custForm(id){const c=id?Store.getCustomers().find(x=>x.id===id):{};const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML='<div class="modal"><div class="modal-header"><h3>'+(id?'编辑':'新增')+'客户</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="row"><div class="form-group"><label>客户名称</label><input class="form-control" id="cust-name" value="'+(c.customer_name||'')+'"></div><div class="form-group"><label>公司</label><input class="form-control" id="cust-company" value="'+(c.company||'')+'"></div></div><div class="form-group"><label>联系方式</label><input class="form-control" id="cust-contact" value="'+(c.contact||'')+'"></div><div class="row"><div class="form-group"><label>客户类型</label><select class="form-control" id="cust-type"><option>终端用户</option><option>代理商</option><option>经销商</option></select></div><div class="form-group"><label>议价风格</label><select class="form-control" id="cust-style"><option>直接议价</option><option>比价施压</option><option>情感拉拢</option></select></div></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._custSave(\''+(id||'')+'\')">保存</button></div></div>';document.body.appendChild(m);if(c.customer_type)document.getElementById('cust-type').value=c.customer_type;if(c.bargaining_style)document.getElementById('cust-style').value=c.bargaining_style;},
-_custSave(id){const data={customer_name:document.getElementById('cust-name').value,company:document.getElementById('cust-company').value,contact:document.getElementById('cust-contact').value,customer_type:document.getElementById('cust-type').value,bargaining_style:document.getElementById('cust-style').value};if(id)Store.updateCustomer(id,data);else Store.saveCustomer(data);document.querySelector('.modal-backdrop').remove();this.switchTab('customers');this.toast('已保存');},
-_custDel(id){if(confirm('确定删除？')){Store.deleteCustomer(id);this.switchTab('customers');this.toast('已删除');}},
-_gaTotal(){return Store.getFxReceipts().length+Store.getCertDocs().length+Store.getPriceQuotes().length+Store.getRealOrders().length+Store.getRefunds().length;},
-renderGAPage(){return'<div class="card"><div class="card-header"><h3>常规申请</h3></div><div class="ga-tabs"><button class="ga-tab active" onclick="App._gaShow(\'fx_receipts\')">外汇收款</button><button class="ga-tab" onclick="App._gaShow(\'cert_docs\')">证明文件</button><button class="ga-tab" onclick="App._gaShow(\'price_quotes\')">产品报价</button><button class="ga-tab" onclick="App._gaShow(\'real_orders\')">实单价格</button><button class="ga-tab" onclick="App._gaShow(\'refunds\')">退款申请</button></div><div id="ga-content"></div></div>';},
-_fga(){this._gaShow('fx_receipts');},
-_gaShow(type){document.querySelectorAll('.ga-tab').forEach(t=>t.classList.remove('active'));if(event)event.target.classList.add('active');const ga={id:type};document.getElementById('ga-content').innerHTML=this._gaTable(ga);},
-_gaTable(ga){const raw=ga.id==='fx_receipts'?Store.getFxReceipts():ga.id==='cert_docs'?Store.getCertDocs():ga.id==='price_quotes'?Store.getPriceQuotes():ga.id==='real_orders'?Store.getRealOrders():Store.getRefunds();const data=Store.filterMine(raw,'general','applicant');return'<div class="card-body"><div class="card-actions"><button class="btn btn-primary" onclick="App._gaForm(\''+ga.id+'\')">+ 新建</button></div><div class="table-wrap"><table class="table"><thead><tr>'+(ga.id==='fx_receipts'?'<th>单号</th><th>申请人</th><th>客户</th><th>国家</th><th>币别</th><th>金额</th><th>部门审核</th><th>财务审核</th><th>总经理</th>':ga.id==='refunds'?'<th>单号</th><th>类型</th><th>客户</th><th>金额</th><th>状态</th>':'<th>单号</th><th>客户</th><th>金额</th><th>状态</th>')+'<th>操作</th></tr></thead><tbody id="ga-tbody">'+this._gaRows(ga,data)+'</tbody></table></div></div>';},
-_gaRows(ga,data){if(!data.length)return'<tr><td colspan="10" class="empty">暂无数据</td></tr>';return data.map(r=>{if(ga.id==='fx_receipts')return'<tr data-id="'+r.id+'"><td><strong>'+(r.receipt_no||r.order_no||'-')+'</strong></td><td>'+(r.applicant||'-')+'</td><td>'+(r.customer_name||'-')+'</td><td>'+(r.country||'-')+'</td><td>'+(r.currency||'-')+'</td><td>'+this.fMoney(r.amount)+'</td><td>'+this.sTag(r.depart_audit)+'</td><td>'+this.sTag(r.finance_audit)+'</td><td>'+this.sTag(r.ceo_approval)+'</td><td>'+this._gaActs(ga,r)+'</td></tr>';if(ga.id==='refunds')return'<tr data-id="'+r.id+'"><td><strong>'+(r.order_no||'-')+'</strong></td><td>'+(r.refund_type||'-')+'</td><td>'+(r.customer_name||'-')+'</td><td>'+this.fMoney(r.total_amount)+'</td><td>'+this.sTag(r.status)+'</td><td>'+this._gaActs(ga,r)+'</td></tr>';return'<tr data-id="'+r.id+'"><td><strong>'+(r.order_no||'-')+'</strong></td><td>'+(r.customer_name||'-')+'</td><td>'+this.fMoney(r.total_amount)+'</td><td>'+this.sTag(r.status)+'</td><td>'+this._gaActs(ga,r)+'</td></tr>';}).join('');},
-_gaActs(ga,r){const stage=this._gaStage(r);let acts='';if(stage)acts+='<button class="btn btn-sm btn-success" onclick="App._gaApp(\''+r.id+'\',\''+ga.id+'\')">✓</button> <button class="btn btn-sm btn-danger" onclick="App._gaRej(\''+r.id+'\',\''+ga.id+'\')">✗</button> ';acts+='<button class="btn btn-sm" onclick="App._gaDetail(\''+r.id+'\',\''+ga.id+'\')">详情</button>';if(Store.currentUser().role==='admin')acts+=' <button class="btn btn-sm btn-danger" onclick="App._gaDel(\''+r.id+'\',\''+ga.id+'\')">删</button>';return acts;},
-_gaStage(item){const u=Store.currentUser();if((item.depart_audit==='待审核'||item.depart_audit==='审核中')&&(u.role==='dept_manager'||u.role==='admin'))return'depart_audit';if((item.finance_audit==='待审核'||item.finance_audit==='审核中')&&(u.role==='finance'||u.role==='admin'))return'finance_audit';if((item.ceo_approval==='待审批'||item.ceo_approval==='待审核'||item.ceo_approval==='审批中')&&(u.role==='ceo'||u.role==='admin'))return'ceo_approval';return null;},
-_gaApp(id,type){const ga={id:type};const item=ga.id==='fx_receipts'?Store.getFxReceipts().find(x=>x.id===id):ga.id==='cert_docs'?Store.getCertDocs().find(x=>x.id===id):ga.id==='price_quotes'?Store.getPriceQuotes().find(x=>x.id===id):ga.id==='real_orders'?Store.getRealOrders().find(x=>x.id===id):Store.getRefunds().find(x=>x.id===id);if(!item)return;const stage=this._gaStage(item);if(!stage)return;const next={depart_audit:'finance_audit',finance_audit:'ceo_approval',ceo_approval:null}[stage];item[stage]='已通过';if(next)item[next]='待审核';else item.status='已通过';Store._set(ga.id==='fx_receipts'?'fx_receipts':ga.id==='cert_docs'?'cert_docs':ga.id==='price_quotes'?'price_quotes':ga.id==='real_orders'?'real_orders':'refunds',ga.id==='fx_receipts'?Store.getFxReceipts():ga.id==='cert_docs'?Store.getCertDocs():ga.id==='price_quotes'?Store.getPriceQuotes():ga.id==='real_orders'?Store.getRealOrders():Store.getRefunds());Store.removeNotification(id);if(next)Store.addNotification({type:'approve',title:'待审批',body:(next==='finance_audit'?'财务审核':next==='ceo_approval'?'总经理审批':'审批')+'待处理',link_id:id,link_tab:'general',for_role:next==='finance_audit'?'finance':next==='ceo_approval'?'ceo':'admin'});else Store.addNotification({type:'info',title:'审批完成',body:'申请已全部通过',link_id:id,link_tab:'general',for_role:'all'});this.toast('已通过');this.updateNotiBadge();this.switchTab('general');},
-_gaRej(id,type){const ga={id:type};const item=ga.id==='fx_receipts'?Store.getFxReceipts().find(x=>x.id===id):ga.id==='cert_docs'?Store.getCertDocs().find(x=>x.id===id):ga.id==='price_quotes'?Store.getPriceQuotes().find(x=>x.id===id):ga.id==='real_orders'?Store.getRealOrders().find(x=>x.id===id):Store.getRefunds().find(x=>x.id===id);if(!item)return;const stage=this._gaStage(item);if(!stage)return;item[stage]='已驳回';item.status='已驳回';Store._set(ga.id==='fx_receipts'?'fx_receipts':ga.id==='cert_docs'?'cert_docs':ga.id==='price_quotes'?'price_quotes':ga.id==='real_orders'?'real_orders':'refunds',ga.id==='fx_receipts'?Store.getFxReceipts():ga.id==='cert_docs'?Store.getCertDocs():ga.id==='price_quotes'?Store.getPriceQuotes():ga.id==='real_orders'?Store.getRealOrders():Store.getRefunds());Store.removeNotification(id);this.toast('已驳回');this.updateNotiBadge();this.switchTab('general');},
-_gaDel(id,type){if(!confirm('确定删除？'))return;const ga={id:type};if(ga.id==='fx_receipts')Store.deleteFxReceipt(id);else if(ga.id==='cert_docs')Store.deleteCertDoc(id);else if(ga.id==='price_quotes')Store.deletePriceQuote(id);else if(ga.id==='real_orders')Store.deleteRealOrder(id);else Store.deleteRefund(id);this.toast('已删除');this.switchTab('general');},
-_gaDetail(id,type){const ga={id:type};const item=ga.id==='fx_receipts'?Store.getFxReceipts().find(x=>x.id===id):ga.id==='cert_docs'?Store.getCertDocs().find(x=>x.id===id):ga.id==='price_quotes'?Store.getPriceQuotes().find(x=>x.id===id):ga.id==='real_orders'?Store.getRealOrders().find(x=>x.id===id):Store.getRefunds().find(x=>x.id===id);if(!item)return;alert(JSON.stringify(item,null,2));},
-_gaForm(type){const m=document.createElement('div');m.className='modal-backdrop';let formHTML='';if(type==='fx_receipts')formHTML=this._fxForm();else if(type==='refunds')formHTML=this._rfb();else formHTML=this._genForm(type);m.innerHTML=formHTML;document.body.appendChild(m);},
-_fxForm(){return'<div class="modal"><div class="modal-header"><h3>新建外汇收款</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="row"><div class="form-group"><label>单号</label><input class="form-control" id="ga-no"></div><div class="form-group"><label>申请人</label><input class="form-control" id="ga-app"></div></div><div class="row"><div class="form-group"><label>客户名称</label>'+this._cs('ga-cust','')+'</div><div class="form-group"><label>客户公司</label><input class="form-control" id="ga-cust-co"></div></div><div class="row"><div class="form-group"><label>国家</label><input class="form-control" id="ga-country"></div><div class="form-group"><label>币别</label><select class="form-control" id="ga-currency"><option>USD</option><option>EUR</option><option>CNY</option></select></div></div><div class="form-group"><label>金额</label><input class="form-control" type="number" id="ga-amount"></div><div class="form-group"><label>收款账号</label><input class="form-control" id="ga-account"></div><div class="form-group"><label>发货方式</label><select class="form-control" id="ga-ship"><option>空运</option><option>海运</option><option>快递</option></select></div><div class="form-group"><label>备注</label><textarea class="form-control" id="ga-notes"></textarea></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._fxSave()">保存</button></div></div>';},
-_fxSave(){const data={receipt_no:document.getElementById('ga-no').value,applicant:document.getElementById('ga-app').value,customer_name:document.getElementById('ga-cust').value,customer_company:document.getElementById('ga-cust-co').value,country:document.getElementById('ga-country').value,currency:document.getElementById('ga-currency').value,amount:document.getElementById('ga-amount').value,receipt_account:document.getElementById('ga-account').value,shipping_method:document.getElementById('ga-ship').value,notes:document.getElementById('ga-notes').value,depart_audit:'待审核',finance_audit:'待审核',ceo_approval:'待审核',status:'待审核'};const fx=Store.saveFxReceipt(data);Store.addNotification({type:'approve',title:'待审批',body:'部门审核待处理:'+data.receipt_no,link_id:fx.id,link_tab:'general',for_role:'dept_manager'});document.querySelector('.modal-backdrop').remove();this.switchTab('general');this.toast('已提交');},
-_rfb(){return'<div class="modal"><div class="modal-header"><h3>新建退款申请</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="form-group"><label>退款类型</label><select class="form-control" id="rf-type" onchange="App._rft(this.value)"><option value="退佣金申请">退佣金申请</option><option value="售后申请">售后申请</option></select></div><div class="row"><div class="form-group"><label>单号</label><input class="form-control" id="rf-no"></div><div class="form-group"><label>客户名称</label>'+this._cs('rf-cust','')+'</div></div><div id="refund-extra"></div><div class="form-group"><label>退款账号</label><input class="form-control" id="rf-account"></div><div class="form-group"><label>备注</label><textarea class="form-control" id="rf-notes"></textarea></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._rfSave()">保存</button></div></div>';},
-_rft(v){const as=document.getElementById('after-sale-fields');if(v==='售后申请'){if(!as){const h='<div id="after-sale-fields"><div class="form-group"><label>售后类型</label><select class="form-control" id="as-type"><option>仅退款</option><option>退货退款</option><option>现货换货</option><option>请购换货</option></select></div><div class="row"><div class="form-group"><label>现货出库完成</label><select class="form-control" id="as-instock"><option>是</option><option>否</option></select></div><div class="form-group"><label>请购出库完成</label><select class="form-control" id="as-purchase"><option>是</option><option>否</option></select></div></div><h4>📦 退单明细 <button class="btn btn-sm btn-outline" onclick="App._asr()">+1</button> <button class="btn btn-sm btn-outline" onclick="App._refundPaste()">📋 批量粘贴</button></h4><div id="ga-refund-rows"></div><div class="form-group"><label>退运费</label><input class="form-control" type="number" step="0.01" id="rf-ship"></div></div>';document.getElementById('refund-extra').insertAdjacentHTML('beforeend',h);}}else{if(as)as.remove();}},
-_asr(){document.getElementById('ga-refund-rows').insertAdjacentHTML('beforeend',this._rfrw({}));},
-_rfrw(item){return'<div class="line-item"><div class="form-group"><label>型号</label>'+this._pmdl('model-'+Date.now(),item.model)+'</div><div class="form-group"><label>数量</label><input class="form-control" type="number" value="'+(item.quantity||'')+'"></div><div class="form-group"><label>单价</label><input class="form-control" type="number" step="0.01" value="'+(item.unit_price||'')+'"></div><div class="form-group"><label>总额</label><input class="form-control" type="number" step="0.01" value="'+(item.total||'')+'"></div><div class="form-group"><label>原因</label><input class="form-control" value="'+(item.reason||'')+'"></div><button class="btn-icon" onclick="this.parentElement.remove()">X</button></div>';},
-_refundPaste(){if(document.getElementById('paste-text'))return;const h='<div class="modal-backdrop" onclick="if(event.target===this)App.closePasteModal()"><div class="modal" style="max-width:500px"><div class="modal-header"><h3>📋 批量粘贴</h3><button class="btn-icon" onclick="App.closePasteModal()">X</button></div><div class="modal-body"><textarea id="paste-text" style="width:100%;height:200px;font-family:monospace;font-size:12px" placeholder="每行一个产品，格式：型号&#9;数量&#9;单价"></textarea></div><div class="modal-footer"><button class="btn btn-outline" onclick="App.closePasteModal()">取消</button><button class="btn btn-primary" onclick="App._refundParse()">粘贴</button></div></div></div>';document.body.insertAdjacentHTML('beforeend',h);},
-_refundParse(){const t=document.getElementById('paste-text').value;if(!t)return;const lines=t.trim().split('\n');const rows=document.getElementById('ga-refund-rows');lines.forEach(line=>{const p=line.split('\t');if(p[0])rows.insertAdjacentHTML('beforeend',this._rfrw({model:p[0],quantity:p[1],unit_price:p[2]}));});this.closePasteModal();},
-_rfSave(){const type=document.getElementById('rf-type').value;const data={order_no:document.getElementById('rf-no').value,refund_type:type,customer_name:document.getElementById('rf-cust').value,receipt_account:document.getElementById('rf-account').value,notes:document.getElementById('rf-notes').value,status:'待审核'};if(type==='售后申请'){data.after_sale_type=document.getElementById('as-type')?.value||'';data.instock_complete=document.getElementById('as-instock')?.value||'';data.purchase_complete=document.getElementById('as-purchase')?.value||'';data.shipping_refund=document.getElementById('rf-ship')?.value||'';const rows=document.querySelectorAll('#ga-refund-rows .line-item');data.products=[];rows.forEach(r=>{const inputs=r.querySelectorAll('input');data.products.push({model:inputs[0]?.value||'',quantity:inputs[1]?.value||'',unit_price:inputs[2]?.value||'',total:inputs[3]?.value||'',reason:inputs[4]?.value||''});});data.total_amount=data.products.reduce((s,p)=>s+(Number(p.total)||Number(p.unit_price)*Number(p.quantity)||0),0)+(Number(data.shipping_refund)||0);}else{data.commission_total=document.getElementById('rf-comm')?.value||'';data.total_amount=Number(data.commission_total)||0;}Store.saveRefund(data);document.querySelector('.modal-backdrop').remove();this.switchTab('general');this.toast('已提交');},
-_genForm(type){const title=type==='cert_docs'?'证明文件':type==='price_quotes'?'产品报价':'实单价格';return'<div class="modal"><div class="modal-header"><h3>新建'+title+'</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><div class="row"><div class="form-group"><label>单号</label><input class="form-control" id="gen-no"></div><div class="form-group"><label>客户名称</label>'+this._cs('gen-cust','')+'</div></div><h4>📦 产品明细 <button class="btn btn-sm btn-outline" onclick="App._genRow()">+1</button> <button class="btn btn-sm btn-outline" onclick="App._genPaste()">📋 批量粘贴</button></h4><div id="gen-rows"></div><div class="form-group"><label>备注</label><textarea class="form-control" id="gen-notes"></textarea></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="this.closest(\'.modal-backdrop\').remove()">取消</button><button class="btn btn-primary" onclick="App._genSave(\''+type+'\')">保存</button></div></div>';},
-_genRow(){document.getElementById('gen-rows').insertAdjacentHTML('beforeend',this._genRowHTML({}));},
-_genRowHTML(p){return'<div class="line-item"><div class="form-group"><label>型号</label>'+this._pmdl('gen-model-'+Date.now(),p.model)+'</div><div class="form-group"><label>数量</label><input class="form-control" type="number" value="'+(p.quantity||'')+'"></div><div class="form-group"><label>单价</label><input class="form-control" type="number" step="0.01" value="'+(p.unit_price||'')+'"></div><div class="form-group"><label>货期</label><input class="form-control" value="'+(p.delivery||'')+'"></div><button class="btn-icon" onclick="this.parentElement.remove()">X</button></div>';},
-_genPaste(){if(document.getElementById('paste-text'))return;const h='<div class="modal-backdrop" onclick="if(event.target===this)App.closePasteModal()"><div class="modal" style="max-width:500px"><div class="modal-header"><h3>📋 批量粘贴</h3><button class="btn-icon" onclick="App.closePasteModal()">X</button></div><div class="modal-body"><textarea id="paste-text" style="width:100%;height:200px;font-family:monospace;font-size:12px" placeholder="每行一个产品，格式：型号&#9;数量&#9;单价&#9;货期"></textarea></div><div class="modal-footer"><button class="btn btn-outline" onclick="App.closePasteModal()">取消</button><button class="btn btn-primary" onclick="App._genParse()">粘贴</button></div></div></div>';document.body.insertAdjacentHTML('beforeend',h);},
-_genParse(){const t=document.getElementById('paste-text').value;if(!t)return;const lines=t.trim().split('\n');const rows=document.getElementById('gen-rows');lines.forEach(line=>{const p=line.split('\t');if(p[0])rows.insertAdjacentHTML('beforeend',this._genRowHTML({model:p[0],quantity:p[1],unit_price:p[2],delivery:p[3]}));});this.closePasteModal();},
-_genSave(type){const rows=document.querySelectorAll('#gen-rows .line-item');const products=[];rows.forEach(r=>{const inputs=r.querySelectorAll('input');products.push({model:inputs[0]?.value||'',quantity:inputs[1]?.value||'',unit_price:inputs[2]?.value||'',delivery:inputs[3]?.value||''});});const total=products.reduce((s,p)=>s+(Number(p.unit_price)*Number(p.quantity)||0),0);const data={order_no:document.getElementById('gen-no').value,customer_name:document.getElementById('gen-cust').value,products,total_amount:total,notes:document.getElementById('gen-notes').value,status:'待审核'};if(type==='cert_docs')Store.saveCertDoc(data);else if(type==='price_quotes')Store.savePriceQuote(data);else Store.saveRealOrder(data);document.querySelector('.modal-backdrop').remove();this.switchTab('general');this.toast('已提交');},
-renderSetPage(){const u=Store.currentUser();let html='<div class="card"><div class="card-header"><h3>系统设置</h3></div><div class="card-body">';if(u.role==='admin'){html+='<div class="setting-group"><h4>👥 用户管理</h4><button class="btn btn-outline" onclick="App._userManage()">管理用户</button></div><div class="setting-group"><h4>🔐 权限配置</h4><button class="btn btn-outline" onclick="App._permConfig()">配置权限</button></div>';}html+='<div class="setting-group"><h4>数据管理</h4><button class="btn btn-outline" onclick="App._exportData()">导出数据</button> <button class="btn btn-outline" onclick="App._importData()">导入数据</button> <button class="btn btn-danger" onclick="App._clearData()">清空数据</button></div></div></div>';return html;},
-_exportData(){const data={inquiries:Store.getInquiries(),products:Store.getProducts(),customers:Store.getCustomers(),fx_receipts:Store.getFxReceipts(),cert_docs:Store.getCertDocs(),price_quotes:Store.getPriceQuotes(),real_orders:Store.getRealOrders(),refunds:Store.getRefunds()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='aotu_crm_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();this.toast('已导出');},
-_importData(){const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const data=JSON.parse(ev.target.result);if(data.inquiries)Store._set('inquiries',data.inquiries);if(data.products)Store._set('products',data.products);if(data.customers)Store._set('customers',data.customers);if(data.fx_receipts)Store._set('fx_receipts',data.fx_receipts);if(data.cert_docs)Store._set('cert_docs',data.cert_docs);if(data.price_quotes)Store._set('price_quotes',data.price_quotes);if(data.real_orders)Store._set('real_orders',data.real_orders);if(data.refunds)Store._set('refunds',data.refunds);this.toast('已导入');this.switchTab('settings');}catch(err){alert('导入失败：'+err.message);}};reader.readAsText(file);};input.click();},
-_clearData(){if(!confirm('确定清空所有数据？此操作不可恢复！'))return;['inquiries','products','customers','fx_receipts','cert_docs','price_quotes','real_orders','refunds','notifications'].forEach(k=>Store._set(k,[]));this.toast('已清空');this.switchTab('settings');},
-_permConfig(){const perms=Store.getPerms();const keys=[{k:'inquiries',l:'询价表',t:'own'},{k:'general',l:'常规申请',t:'own'},{k:'products',l:'产品库',t:'bool'},{k:'customers',l:'客户信息',t:'bool'},{k:'users',l:'用户管理',t:'bool'},{k:'settings',l:'系统设置',t:'bool'},{k:'perms',l:'权限配置',t:'bool'}];const roles=Object.keys(perms);let html='<div class="modal-backdrop" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:900px"><div class="modal-header"><h3>&#128274; 权限配置</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><table class="table"><thead><tr><th>权限</th>';roles.forEach(r=>{html+='<th style="text-align:center">'+perms[r].label+'</th>';});html+='</tr></thead><tbody>';keys.forEach(k=>{html+='<tr><td><strong>'+k.l+'</strong></td>';roles.forEach(r=>{const cur=perms[r][k.k];const isOwn=k.t==='own';const checked=cur==='all'||cur===true;const cid='pc_'+r+'_'+k.k;html+='<td style="text-align:center"><input type="checkbox" id="'+cid+'" '+(checked?'checked':'')+' onchange="App._permToggle(\''+r+'\',\''+k.k+'\',\''+k.t+'\',this.checked)"></td>';});html+='</tr>';});html+='</tbody></table></div></div></div>';document.body.insertAdjacentHTML('beforeend',html);},
-_permToggle(role,key,type,checked){let val;if(type==='own'){val=checked?'all':'own';}else{val=checked?(key==='inquiries'||key==='general'?'all':true):(key==='inquiries'||key==='general'?'own':false);}Store.updatePerm(role,key,val);this.toast('已更新');},
-_permSave(role,key,val){Store.updatePerm(role,key,val);},
-_userManage(){const users=Store.getUsers();const roles=[{v:'sales',l:'普通业务员'},{v:'dept_manager',l:'部门主管'},{v:'finance',l:'财务'},{v:'ceo',l:'总经理'},{v:'admin',l:'管理员'}];const html='<div class="modal-backdrop" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:700px"><div class="modal-header"><h3>👥 用户管理</h3><button class="btn-icon" onclick="this.closest(\'.modal-backdrop\').remove()">X</button></div><div class="modal-body"><table class="table"><thead><tr><th>用户名</th><th>姓名</th><th>当前角色</th><th>操作</th></tr></thead><tbody>'+users.map(u=>'<tr><td><strong>'+u.username+'</strong></td><td>'+(u.name||'-')+'</td><td>'+this._roleTag(u.role)+'</td><td>'+(u.role!=='admin'?'<select class="form-control" style="width:140px;display:inline" id="role-'+u.id+'">'+roles.map(r=>'<option value="'+r.v+'"'+(u.role===r.v?' selected':'')+'>'+r.l+'</option>').join('')+'</select> <button class="btn btn-sm btn-primary" onclick="App._setRole(\''+u.id+'\')">确认</button> <button class="btn btn-sm btn-danger" onclick="App._delUser(\''+u.id+'\')">删除</button>':'管理员')+'</td></tr>').join('')+'</tbody></table></div></div></div>';document.body.insertAdjacentHTML('beforeend',html);},
-_roleTag(r){const m={admin:'管理员',sales:'普通业务员',dept_manager:'部门主管',finance:'财务',ceo:'总经理'};return'<span class="tag tag-'+(r==='admin'?'danger':r==='dept_manager'?'warning':r==='finance'?'info':'primary')+'">'+(m[r]||r)+'</span>';},
-_setRole(id){const role=document.getElementById('role-'+id).value;Store.updateUserRole(id,role);document.querySelector('.modal-backdrop').remove();this.toast('已更新角色');},
-_delUser(id){if(!confirm('确定删除该用户？'))return;Store.deleteUser(id);document.querySelector('.modal-backdrop').remove();this.toast('已删除');}
-};
-document.addEventListener('DOMContentLoaded',()=>App.init());
+/**
+ * 奥图CRM - 应用逻辑
+ * Supabase 直连版
+ */
+
+/* ====== 全局变量 ====== */
+let _currentTab = 'inquiries';
+let _userCache = {};
+
+/* ====== 初始化 ====== */
+(async function(){
+  // 检测是否已登录
+  const user = Store.currentUser();
+  if (user) {
+    document.getElementById('loginForm').style.display = 'none';
+    renderApp();
+  }
+})();
+
+/* ====== 登录 ====== */
+async function doLogin() {
+  const u = document.querySelector('input[placeholder="用户名"]').value.trim();
+  const p = document.querySelector('input[placeholder="密码"]').value.trim();
+  if (!u || !p) { showMsg('请输入用户名和密码'); return; }
+  showMsg('登录中...');
+  const user = await Store.login(u, p);
+  if (user) {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('message').textContent = '';
+    renderApp();
+  } else {
+    showMsg('用户名或密码错误');
+  }
+}
+
+/* ====== 注册 ====== */
+function showRegister() {
+  const box = document.querySelector('.login-box');
+  box.innerHTML = `
+    <div class="company">注册新账号</div>
+    <div class="input-group"><input type="text" placeholder="用户名" id="regUser" class="input"></div>
+    <div class="input-group"><input type="text" placeholder="姓名" id="regName" class="input"></div>
+    <div class="input-group"><input type="password" placeholder="密码" id="regPass" class="input"></div>
+    <button class="login-btn" onclick="doRegister()">注 册</button>
+    <a onclick="showLogin()" style="display:block;text-align:center;margin-top:10px;font-size:13px;color:#667;cursor:pointer">返回登录</a>`;
+}
+
+function showLogin() {
+  const box = document.querySelector('.login-box');
+  box.innerHTML = `
+    <div class="company">深圳市华联自动化设备有限公司</div>
+    <div class="input-group"><input type="text" placeholder="用户名" class="input" value=""></div>
+    <div class="input-group"><input type="password" placeholder="密码" class="input" value=""></div>
+    <button class="login-btn" onclick="doLogin()">登 录</button>
+    <a onclick="showRegister()" style="display:block;text-align:center;margin-top:10px;font-size:13px;color:#667;cursor:pointer">注册新账号</a>`;
+}
+
+async function doRegister() {
+  const u = document.getElementById('regUser').value.trim();
+  const n = document.getElementById('regName').value.trim();
+  const p = document.getElementById('regPass').value.trim();
+  if (!u || !p) { showMsg('请填写完整'); return; }
+  showMsg('注册中...');
+  const user = await Store.register(u, p, n);
+  if (user) {
+    showMsg('注册成功，请登录');
+    showLogin();
+  } else {
+    showMsg('用户名已存在');
+  }
+}
+
+function showMsg(t) {
+  const el = document.getElementById('message');
+  if (el) el.textContent = t;
+}
+
+/* ====== 渲染主应用 ====== */
+async function renderApp() {
+  const app = document.getElementById('app');
+  const tabs = Store.currentUser()?.role === 'admin'
+    ? ['inquiries','products','customers','fx_receipts','docs','notifications','settings']
+    : ['inquiries','products','customers','fx_receipts','docs','notifications','settings'];
+  
+  const labels = { inquiries:'询价', products:'产品管理', customers:'客户管理',
+    fx_receipts:'外汇收款', docs:'单证管理', notifications:'通知', settings:'设置' };
+  
+  app.innerHTML = `
+    <div class="top-bar">
+      <div class="top-title">奥图CRM</div>
+      <div class="top-user">${Store.currentUser()?.name||''} (${Store.currentUser()?.role||''}) 
+        <a onclick="doLogout()" style="margin-left:15px;font-size:13px;cursor:pointer;color:#99a">退出</a>
+      </div>
+    </div>
+    <div class="tab-bar">${tabs.map(t => `<button class="tab ${t==='inquiries'?'active':''}" onclick="switchTab('${t}')">${labels[t]||t}</button>`).join('')}</div>
+    <div class="main-content"><div id="tabContent"></div></div>`;
+  
+  switchTab('inquiries');
+}
+
+function doLogout() {
+  Store.logout();
+  document.getElementById('app').innerHTML = '';
+  document.getElementById('loginForm').style.display = '';
+}
+
+/* ====== Tab 切换 ====== */
+async function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${tab}"]`)?.classList.add('active');
+  _currentTab = tab;
+  
+  const el = document.getElementById('tabContent');
+  
+  if (tab === 'inquiries') { renderInquiries(el); return; }
+  if (tab === 'products') { renderProducts(el); return; }
+  if (tab === 'customers') { renderCustomers(el); return; }
+  if (tab === 'fx_receipts') { renderFxReceipts(el); return; }
+  if (tab === 'docs') { renderDocs(el); return; }
+  if (tab === 'notifications') { renderNotifications(el); return; }
+  if (tab === 'settings') { renderSettings(el); return; }
+}
+
+/* ====== 通用表格渲染 ====== */
+function renderTable(container, columns, data, actions) {
+  let html = `<table class="data-table"><thead><tr>`;
+  columns.forEach(c => { html += `<th>${c.label}</th>`; });
+  if (actions) html += `<th>操作</th>`;
+  html += `</tr></thead><tbody>`;
+  
+  if (!data || !data.length) {
+    html += `<tr><td colspan="${columns.length+(actions?1:0)}" style="text-align:center;color:#999;padding:30px">暂无数据</td></tr>`;
+  } else {
+    data.forEach((row, idx) => {
+      html += `<tr${actions ? ` onclick="editItem('${_currentTab}','${row.id}')" style="cursor:pointer"` : ''}>`;
+      columns.forEach(c => {
+        let val = row[c.field] || '';
+        if (c.format) val = c.format(val, row);
+        html += `<td>${val}</td>`;
+      });
+      if (actions) html += `<td><a onclick="event.stopPropagation();deleteItem('${_currentTab}','${row.id}')" style="color:red;cursor:pointer">删除</a></td>`;
+      html += `</tr>`;
+    });
+  }
+  
+  html += `</tbody></table>`;
+  html += `<button class="add-btn" onclick="addItem('${_currentTab}')">+ 新增</button>`;
+  
+  container.innerHTML = html;
+}
+
+/* ====== 询价管理 ====== */
+async function renderInquiries(el) { el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getInquiries();
+  renderTable(el, [
+    { label:'询价编号', field:'inquiry_no' },
+    { label:'客户', field:'customer_name' },
+    { label:'业务员', field:'salesperson' },
+    { label:'日期', field:'inquiry_date' },
+    { label:'状态', field:'status' }
+  ], data, true);
+}
+
+/* ====== 产品管理 ====== */
+async function renderProducts(el) {
+  el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getProducts();
+  renderTable(el, [
+    { label:'产品编号', field:'product_code' },
+    { label:'品牌', field:'brand' },
+    { label:'型号', field:'model' },
+    { label:'分类', field:'category' },
+    { label:'价格', field:'price', format: v => '¥' + Number(v).toFixed(2) }
+  ], data, true);
+}
+
+/* ====== 客户管理 ====== */
+async function renderCustomers(el) {
+  el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getCustomers();
+  renderTable(el, [
+    { label:'客户名', field:'customer_name' },
+    { label:'公司', field:'company' },
+    { label:'联系人', field:'contact' },
+    { label:'类型', field:'customer_type' },
+    { label:'风格', field:'bargaining_style' }
+  ], data, true);
+}
+
+/* ====== 外汇收款 ====== */
+async function renderFxReceipts(el) {
+  el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getFxReceipts();
+  renderTable(el, [
+    { label:'收款编号', field:'receipt_no' },
+    { label:'申请人', field:'applicant' },
+    { label:'客户', field:'customer_name' },
+    { label:'币种', field:'currency' },
+    { label:'金额', field:'amount', format: v => Number(v).toLocaleString() },
+    { label:'状态', field:'status' }
+  ], data, true);
+}
+
+/* ====== 单证管理 ====== */
+async function renderDocs(el) {
+  el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getCertDocs();
+  renderTable(el, [
+    { label:'订单编号', field:'order_no' },
+    { label:'客户', field:'customer_name' },
+    { label:'金额', field:'total_amount', format: v => Number(v).toFixed(2) },
+    { label:'状态', field:'status' }
+  ], data, true);
+}
+
+/* ====== 通知 ====== */
+async function renderNotifications(el) {
+  el.innerHTML = '<div style="padding:20px;text-align:center">加载中...</div>';
+  const data = await Store.getMyNotifications();
+  let html = `<div style="padding:15px"><h3>通知中心</h3><a onclick="clearAllNoti()" style="color:#66b;cursor:pointer;font-size:13px">清除全部</a></div>`;
+  if (!data || !data.length) {
+    html += `<div style="padding:30px;text-align:center;color:#999">暂无通知</div>`;
+  } else {
+    data.forEach(n => {
+      html += `<div class="noti-item ${n.read?'':'unread'}" onclick="goToNoti('${n.link_id||''}','${n.link_tab||''}')" style="padding:12px 15px;border-bottom:1px solid #eee;cursor:pointer${n.read?'':';background:#e8f4ff'}">
+        <div style="font-weight:bold;font-size:14px">${n.title||''}</div>
+        <div style="font-size:12px;color:#667;margin-top:4px">${n.body||''}</div>
+      </div>`;
+    });
+  }
+  el.innerHTML = html;
+}
+
+function clearAllNoti() {
+  Store.getNotifications().then(all => all.forEach(n => Store._delete('notifications', n.id)));
+  renderNotifications(document.getElementById('tabContent'));
+}
+
+function goToNoti(linkId, linkTab) {
+  if (linkTab) switchTab(linkTab);
+}
+
+/* ====== 设置 ====== */
+async function renderSettings(el) {
+  const user = Store.currentUser();
+  if (user?.role !== 'admin') { el.innerHTML = '<div style="padding:20px">无权限访问</div>'; return; }
+  
+  const users = await Store.getUsers();
+  const perms = await Store.getPerms();
+  
+  let html = `<div style="padding:15px"><h3>设置</h3></div>`;
+  
+  // 用户管理
+  html += `<div class="section"><h4>管理用户</h4><table class="data-table"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>操作</th></tr></thead><tbody>`;
+  users.forEach(u => {
+    const roles = Object.keys(perms).map(r => `<option value="${r}" ${u.role===r?'selected':''}>${perms[r]?.label||r}</option>`).join('');
+    html += `<tr>
+      <td>${u.username}</td><td>${u.name}</td>
+      <td><select onchange="updateUserRole('${u.id}',this.value)">${roles}</select></td>
+      <td><a onclick="deleteUser('${u.id}')" style="color:red;cursor:pointer">删除</a></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  
+  // 权限配置
+  html += `<div class="section"><h4>配置权限</h4>`;
+  html += `<table class="data-table"><thead><tr><th>角色</th><th>询价</th><th>外汇/通用</th><th>产品</th><th>客户</th><th>用户</th><th>设置</th></tr></thead><tbody>`;
+  Object.entries(perms).forEach(([role, p]) => {
+    html += `<tr><td><b>${p.label}</b></td>`;
+    ['inquiries','general','products','customers','users','settings'].forEach(k => {
+      const v = p[k];
+      const checked = v === true || v === 'all' ? 'checked' : '';
+      html += `<td><input type="checkbox" ${checked} onchange="updatePerm('${role}','${k}',this.checked?'all':false)"></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  
+  el.innerHTML = html;
+}
+
+async function updateUserRole(id, role) {
+  await Store.updateUserRole(id, role);
+  showMsg('角色已更新');
+}
+
+async function deleteUser(id) {
+  if (!confirm('确定删除此用户？')) return;
+  await Store.deleteUser(id);
+  renderSettings(document.getElementById('tabContent'));
+}
+
+async function updatePerm(role, key, val) {
+  await Store.updatePerm(role, key, val);
+  showMsg('权限已更新');
+}
+
+/* ====== 新增/编辑/删除 ====== */
+async function addItem(tab) {
+  const labels = { inquiries:'询价', products:'产品', customers:'客户', fx_receipts:'外汇收款', docs:'单证' };
+  const fields = {
+    inquiries: [{k:'inquiry_no',l:'询价编号'},{k:'customer_name',l:'客户名'},{k:'salesperson',l:'业务员'},{k:'inquiry_date',l:'日期'},{k:'status',l:'状态'}],
+    products: [{k:'product_code',l:'产品编号'},{k:'brand',l:'品牌'},{k:'model',l:'型号'},{k:'category',l:'分类'},{k:'price',l:'价格'}],
+    customers: [{k:'customer_name',l:'客户名'},{k:'company',l:'公司'},{k:'contact',l:'联系人'},{k:'customer_type',l:'类型'},{k:'bargaining_style',l:'风格'}],
+    fx_receipts: [{k:'receipt_no',l:'收款编号'},{k:'applicant',l:'申请人'},{k:'customer_name',l:'客户'},{k:'currency',l:'币种'},{k:'amount',l:'金额'}],
+    docs: [{k:'order_no',l:'订单编号'},{k:'customer_name',l:'客户'},{k:'total_amount',l:'金额'}]
+  };
+  
+  let html = `<div class="modal-overlay" onclick="this.remove()"><div class="modal" onclick="event.stopPropagation()">
+    <h3>新增${labels[tab]}</h3>`;
+  
+  (fields[tab]||[]).forEach(f => {
+    html += `<div style="margin:8px 0"><label>${f.l}</label><input type="text" id="f_${f.k}" class="input" style="width:100%"></div>`;
+  });
+  
+  html += `<button class="login-btn" onclick="saveItem('${tab}')">保存</button>
+    <button class="login-btn" style="background:#999;margin-left:10px" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div></div>`;
+  
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function saveItem(tab) {
+  const fields = {inquiries:['inquiry_no','customer_name','salesperson','inquiry_date','status'],
+    products:['product_code','brand','model','category','price'],
+    customers:['customer_name','company','contact','customer_type','bargaining_style'],
+    fx_receipts:['receipt_no','applicant','customer_name','currency','amount'],
+    docs:['order_no','customer_name','total_amount']};
+  
+  const data = {};
+  (fields[tab]||[]).forEach(k => {
+    const el = document.getElementById('f_'+k);
+    if (el) data[k] = el.value.trim();
+  });
+  if (!Object.values(data).some(v => v)) return;
+  
+  if (tab === 'products') await Store.saveProduct(data);
+  else if (tab === 'inquiries') await Store.saveInquiry(data);
+  else if (tab === 'customers') await Store.saveCustomer(data);
+  else if (tab === 'fx_receipts') await Store.saveFxReceipt(data);
+  else if (tab === 'docs') await Store.saveCertDoc(data);
+  
+  document.querySelector('.modal-overlay')?.remove();
+  switchTab(tab);
+}
+
+async function editItem(tab, id) {
+  const all = await Store['get' + tab.charAt(0).toUpperCase() + tab.slice(1)]();
+  const item = all.find(r => r.id === id);
+  if (!item) return;
+  
+  const fields = {inquiries:['inquiry_no','customer_name','salesperson','inquiry_date','status'],
+    products:['product_code','brand','model','category','price'],
+    customers:['customer_name','company','contact','customer_type','bargaining_style'],
+    fx_receipts:['receipt_no','applicant','customer_name','currency','amount'],
+    docs:['order_no','customer_name','total_amount']};
+  
+  let html = `<div class="modal-overlay" onclick="this.remove()"><div class="modal" onclick="event.stopPropagation()">
+    <h3>编辑</h3>`;
+  
+  (fields[tab]||[]).forEach(f => {
+    html += `<div style="margin:8px 0"><label>${f}</label><input type="text" id="e_${f}" class="input" value="${item[f]||''}" style="width:100%"></div>`;
+  });
+  
+  html += `<button class="login-btn" onclick="updateItem('${tab}','${id}')">保存</button>
+    <button class="login-btn" style="background:#999;margin-left:10px" onclick="this.closest('.modal-overlay').remove()">取消</button>
+  </div></div>`;
+  
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function updateItem(tab, id) {
+  const fields = {inquiries:['inquiry_no','customer_name','salesperson','inquiry_date','status'],
+    products:['product_code','brand','model','category','price'],
+    customers:['customer_name','company','contact','customer_type','bargaining_style'],
+    fx_receipts:['receipt_no','applicant','customer_name','currency','amount'],
+    docs:['order_no','customer_name','total_amount']};
+  
+  const data = {};
+  (fields[tab]||[]).forEach(k => {
+    const el = document.getElementById('e_'+k);
+    if (el) data[k] = el.value.trim();
+  });
+  
+  const method = Store['update' + tab.charAt(0).toUpperCase() + tab.slice(1)] || Store._update;
+  await method(tab, id, data);
+  document.querySelector('.modal-overlay')?.remove();
+  switchTab(tab);
+}
+
+async function deleteItem(tab, id) {
+  if (!confirm('确定删除？')) return;
+  const method = Store['delete' + tab.charAt(0).toUpperCase() + tab.slice(1)] || Store._delete;
+  await method(tab, id);
+  switchTab(tab);
+}
