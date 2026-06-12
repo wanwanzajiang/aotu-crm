@@ -1,75 +1,71 @@
-# 奥图CRM — Supabase 版
+# 🏢 奥图CRM - 商务审批管理系统
 
-## 🚀 部署步骤
+> 基于 Supabase PostgreSQL + Node.js 的商务审批管理系统
 
-### 1️⃣ 创建数据库表
-1. 打开 Supabase 控制台 → **SQL Editor**
-2. 复制 `supabase/migration.sql` 全部内容
-3. 粘贴运行 ✅
+## ✨ 功能特性
 
-### 2️⃣ 配置 Supabase URL
-1. 打开 `supabase/config.js`
-2. 把 `YOUR_PROJECT_REF` 换成你的项目引用ID
+- ✅ **5种角色**：管理员 / 总经理 / 财务 / 部门主管 / 业务员
+- ✅ **三级审批流**：部门主管 → 财务 → 总经理
+- ✅ **询价管理**：产品型号/品牌搜索下拉、批量粘贴导入
+- ✅ **客户管理**：关联客户搜索
+- ✅ **产品管理**：含单证文件上传
+- ✅ **外汇到账**：Fx Receipt 完整审批流程
+- ✅ **通知系统**：实时推送、点击跳转、角色过滤
+- ✅ **权限配置**：管理员可自由分配模块权限
+- ✅ **用户管理**：注册用户、修改角色、数据隔离
 
-> 项目引用ID 在 Supabase 控制台 URL 里：`https://<项目ID>.supabase.co`
+## 🚀 一键部署
 
-### 3️⃣ 启动后端
+### 方式1：Railway（推荐）
+
+[\![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?template=wanwanzajiang/aotu-crm)
+
+1. 点击上方按钮 → 登录 GitHub
+2. 选择仓库 `wanwanzajiang/aotu-crm`
+3. 点击 "Deploy"
+4. 2分钟后打开 Railway 生成的 URL ✓
+
+### 方式2：直接运行（本地开发）
+
 ```bash
-cd backend
-npm install
+# 1. 安装依赖
+cd backend && npm install
+
+# 2. 启动（默认端口 3456）
 node server.js
+
+# 3. 打开浏览器
+open http://localhost:3456
 ```
-
-或者直接：
-```bash
-bash start.sh
-```
-
-### 4️⃣ 访问
-浏览器打开 `http://localhost:3456`
-
----
-
-## 📡 前后端分离部署
-
-**后端**（本仓库）：
-- 部署到任意 Node.js 服务器
-- 端口 3456，可通过环境变量 `PORT` 修改
-
-**前端**（你明天上 git 的部分）：
-- 可以是纯静态文件
-- 只需把 API 地址改成你的服务器地址
-- 或者用 Vercel/Netlify 部署
-
----
 
 ## 🔐 默认账号
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
-| admin | admin888 | 管理员 |
-| sales01 | 123456 | 销售 |
-| dept_mgr | 123456 | 部门主管 |
-| finance | 123456 | 财务 |
-| ceo | 123456 | 总经理 |
+| admin | admin888 | 管理员 👑 |
+| sales01 | 123456 | 业务员 💼 |
+| dept_mgr | 123456 | 部门主管 📋 |
+| finance | 123456 | 财务 💰 |
+| ceo | 123456 | 总经理 🏢 |
 
----
+## 🗄️ 数据库
 
-## 📋 API 文档
+使用 Supabase PostgreSQL，项目 ID: `liisnttpmsuynpqhiapj`
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/login | 登录 |
-| POST | /api/register | 注册 |
-| GET | /api/:table | 列表 |
-| POST | /api/:table | 新增 |
-| PUT | /api/:table/:id | 修改 |
-| DELETE | /api/:table/:id | 删除 |
-| POST | /api/approve/:table/:id | 审批通过 |
-| POST | /api/reject/:table/:id | 驳回 |
-| GET | /api/admin/users | 用户列表 |
-| PUT | /api/admin/users/:id/role | 修改角色 |
-| GET | /api/admin/perms | 权限配置 |
-| PUT | /api/admin/perms | 修改权限 |
-| GET | /api/notifications | 通知列表 |
-| GET | /api/notifications/unread | 未读数量 |
+## 📂 项目结构
+
+```
+├── index.html        ← 主页面
+├── js/
+│   ├── store.js      ← 数据层（localStorage + Supabase API）
+│   ├── app.js        ← 应用逻辑
+│   └── supabase-client.js  ← Supabase 直接连接
+├── css/style.css
+├── backend/
+│   ├── server.js     ← Node.js 后端
+│   ├── api.js        ← API 路由
+│   └── package.json
+└── supabase/
+    ├── config.js     ← Supabase 配置
+    └── migration.sql ← 数据库建表脚本
+```

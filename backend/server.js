@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = process.env.PORT || 3456;
+const PORT = parseInt(process.env.RAILWAY_PORT || process.env.PORT) || 3456;
 
 const JWT_SECRET = 'aotu_crm_jwt_secret_2026';
 
@@ -239,7 +239,7 @@ app.post('/api/notifications/read/:id', async (req, res) => {
 });
 
 // Start
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('✅ 奥图CRM Supabase 版后端启动!');
   console.log('📡 http://localhost:' + PORT);
   console.log('🗄️  Supabase PostgreSQL: liisnttpmsuynpqhiapj');
