@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: aotu-crm
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: PORT
+        value: 3456
+    plan: free
