@@ -68,7 +68,7 @@ const Store = {
       const users = await this._fetch('users?select=*');
       const user = users.find(u => u.username === username);
       if (\!user) return null;
-      const bcrypt = await import('https://cdn.jsdelivr.net/npm/bcryptjs@2/+esm');
+      
       if (\!bcrypt.compareSync(password, user.password)) return null;
       const { password:_, ...safe } = user;
       this._user = safe;
@@ -81,8 +81,8 @@ const Store = {
     try {
       const users = await this._fetch('users?select=username');
       if (users.find(u => u.username === username)) return null;
-      const bcrypt = await import('https://cdn.jsdelivr.net/npm/bcryptjs@2/+esm');
-      const hash = bcrypt.hashSync(password);
+      
+      const hash = dcodeIO.bcrypt.hashSync(password);
       const id = 'u_' + Date.now().toString(36);
       const user = { id, username, password:hash, name:name||username, role:'sales', avatar:'👤', created_at:Date.now() };
       await this._fetch('users', { method:'POST', body:JSON.stringify(user) });
