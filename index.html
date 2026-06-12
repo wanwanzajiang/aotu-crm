@@ -7,7 +7,22 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div id="app"></div>
+<div id="app">
+<div id="loginForm" class="login-container">
+  <div class="logo"><span class="logo-text">奥图CRM</span></div>
+  <div class="login-box">
+    <div class="company">深圳市华联自动化设备有限公司</div>
+    <div class="input-group">
+      <input type="text" placeholder="用户名" class="input" value="">
+      <input type="password" placeholder="密码" class="input" value="">
+    </div>
+    <button class="login-btn" onclick="doLogin()">登 录</button>
+    <a onclick="showRegister()" style="display:block;text-align:center;margin-top:10px;font-size:13px;color:#667;cursor:pointer">注册新账号</a>
+  </div>
+  <div id="message"></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bcryptjs@2/bcrypt.min.js"></script>
 <script src="js/store.js"></script>
 <script src="js/app.js"></script>
 </body>
