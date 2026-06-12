@@ -1,5 +1,17 @@
 {
-  "name": "奥图CRM",
-  "version": "1.0.0",
-  "description": "奥图客户关系与订单管理系统"
+  "name": "aotu-crm",
+  "version": "6.0.0",
+  "description": "奥图CRM - 商务审批管理系统",
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "setup": "node scripts/setup.js",
+    "setup:sql": "node scripts/setup.js --sql-only"
+  },
+  "dependencies": {
+    "pg": "^8.13.0",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.0",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2"
+  }
 }

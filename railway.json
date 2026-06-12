@@ -1,9 +1,12 @@
 {
+  "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
     "buildCommand": "cd backend && npm install"
   },
-  "start": {
-    "command": "cd backend && node server.js"
+  "deploy": {
+    "startCommand": "cd backend && node server.js",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
   }
 }

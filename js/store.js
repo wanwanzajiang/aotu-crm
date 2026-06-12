@@ -1,137 +1,231 @@
 /**
- * 奥图CRM — 数据存储层 v4.0（完整版）
+ * 奥图CRM - 数据层
+ * 双模式: 自动检测后端 API, 有则用 API, 无则用 localStorage
  */
+
+const API_BASE = window.location.port === '3456' || window.location.port === '3000' 
+  ? '' : 'http://localhost:3456';
+
 const Store = {
-  _prefix: 'aotu_',
-  _key(n) { return this._prefix + n; },
-  _get(n) { try { return JSON.parse(localStorage.getItem(this._key(n))); } catch { return null; } },
-  _set(n, d) { localStorage.setItem(this._key(n), JSON.stringify(d)); },
-  _uid(n) { return (n||'') + Date.now().toString(36) + Math.random().toString(36).substr(2, 6); },
+  _token: localStorage.getItem('aotu_token') || '',
+  _user: JSON.parse(localStorage.getItem('aotu_user') || 'null'),
+  _ready: false,
+  _api: API_BASE + '/api',
+  _fallback: \!API_BASE, // 无 API 时用 localStorage
 
-  /* ========== 用户 ========== */
-  DEFAULT_USERS: [
-    { id:'u_admin',username:'admin',password:'admin888',name:'系统管理员',role:'admin',avatar:'👑' },
-    { id:'u_sales',username:'sales01',password:'123456',name:'张销售',role:'sales',avatar:'💼' },
-    { id:'u_dept',username:'dept_mgr',password:'123456',name:'王主管',role:'dept_manager',avatar:'📋' },
-    { id:'u_finance',username:'finance',password:'123456',name:'李财务',role:'finance',avatar:'💰' },
-    { id:'u_ceo',username:'ceo',password:'123456',name:'陈总',role:'ceo',avatar:'🏢' },
-  ],
-  ROLE_LABELS:{admin:'管理员',sales:'销售员',dept_manager:'部门主管',finance:'财务',ceo:'总经理'},
-  ROLE_APPROVE:{dept_manager:'depart_audit',finance:'finance_audit',ceo:'ceo_approval'},
-  STAGE_ORDER:['depart_audit','finance_audit','ceo_approval'],
-  STAGE_LABEL:{depart_audit:'部门审核',finance_audit:'财务审核',ceo_approval:'总经理审批'},
-  STAGE_NEXT:{depart_audit:'finance_audit',finance_audit:'ceo_approval',ceo_approval:null},
-  STAGE_APPROVER:{depart_audit:'dept_manager',finance_audit:'finance',ceo_approval:'ceo'},
-
-  /* ========== 权限配置 ========== */
-  DEFAULT_PERMS:{
-    sales:{label:'普通业务员',inquiries:'own',general:'own',products:true,customers:true,users:false,settings:false,perms:false},
-    dept_manager:{label:'部门主管',inquiries:'own',general:'own',products:true,customers:true,users:false,settings:false,perms:false},
-    finance:{label:'财务',inquiries:'all',general:'all',products:true,customers:true,users:false,settings:false,perms:false},
-    ceo:{label:'总经理',inquiries:'all',general:'all',products:true,customers:true,users:false,settings:true,perms:false},
-    admin:{label:'管理员',inquiries:'all',general:'all',products:true,customers:true,users:true,settings:true,perms:true}
-  },
-  getPerms(){return this._get('perms')||this.DEFAULT_PERMS;},
-  updatePerm(role,key,val){const perms=this.getPerms();if(!perms[role])perms[role]={};perms[role][key]=val;this._set('perms',perms);},
-
-  /* ========== 数据权限检查 ========== */
-  canViewAll(module){const u=this.currentUser();if(!u)return false;const perms=this.getPerms();const r=perms[u.role];return r&&r[module]==='all';},
-  filterMine(list,module,field){const u=this.currentUser();if(!u)return list;if(this.canViewAll(module))return list;const perms=this.getPerms();const r=perms[u.role];if(r&&r[module]==='own')return list.filter(i=>i[field||'salesperson']===u.name||i.created_by===u.id);return list;},
-
-  _initUsers(){try{const e=JSON.parse(localStorage.getItem(this._key('users'))||'[]');if(e.length===0)localStorage.setItem(this._key('users'),JSON.stringify(this.DEFAULT_USERS));}catch{localStorage.setItem(this._key('users'),JSON.stringify(this.DEFAULT_USERS));}},
-  getUsers(){this._initUsers();return JSON.parse(localStorage.getItem(this._key('users'))||'[]');},
-
-  login(username,password){const u=this.getUsers().find(u=>u.username===username&&u.password===password);if(u){const{password,...s}=u;s.token='tk_'+Date.now().toString(36);sessionStorage.setItem(this._key('session'),JSON.stringify({user:s,ts:Date.now()}));return s;}return null;},
-  logout(){sessionStorage.removeItem(this._key('session'));},
-  register(username,password,name){const users=this.getUsers();if(users.find(u=>u.username===username))return null;const user={id:this._uid('u_'),username,password,name:name||username,role:'sales',avatar:'👤',created_at:Date.now()};users.push(user);this._set('users',users);const{password:p,...safe}=user;return safe;},
-  updateUserRole(userId,role){const users=this.getUsers();const idx=users.findIndex(u=>u.id===userId);if(idx<0)return false;users[idx].role=role;this._set('users',users);return true;},
-  deleteUser(userId){const cu=this.currentUser();if(!cu||userId===cu.id)return false;const users=this.getUsers();const idx=users.findIndex(u=>u.id===userId);if(idx<0||users[idx].role==='admin')return false;users.splice(idx,1);this._set('users',users);return true;},
-  currentUser(){try{const s=JSON.parse(sessionStorage.getItem(this._key('session')));if(s&&s.user)return s.user;}catch{}return null;},
-  isLoggedIn(){return!!this.currentUser();},
-  hasRole(role){const u=this.currentUser();return u&&(u.role===role||u.role==='admin');},
-
-  /* ========== 通知 ========== */
-  getNotifications(){return this._get('notifications')||[];},
-  getMyNotifications(){const u=this.currentUser();if(!u)return this.getNotifications();return this.getNotifications().filter(n=>n.for_role==='all'||n.for_role===u.role||u.role==='admin');},
-  addNotification(n){const l=this.getNotifications();l.unshift({id:this._uid('n_'),...n,read:false,created_at:Date.now()});this._set('notifications',l);},removeNotification(linkId){const l=this.getNotifications().filter(n=>n.link_id!==linkId);this._set('notifications',l);},
-  unreadCount(){const u=this.currentUser();if(!u)return 0;return this.getNotifications().filter(n=>!n.read&&(n.for_role==='all'||n.for_role===u.role||u.role==='admin')).length;},
-
-  /* ========== 通用 CRUD ========== */
-  _arr(n,d){d=d||[];const v=this._get(n);return Array.isArray(v)?v:d;},
-  _getById(n,id){return this._arr(n).find(x=>x.id===id);},
-  _save(n,item,defaults){const l=this._arr(n);if(item.id){const i=l.findIndex(x=>x.id===item.id);if(i>=0){l[i]={...l[i],...item,updated_at:Date.now()};this._set(n,l);return l[i];}}const now=Date.now();item.id=this._uid();item.created_at=now;item.updated_at=now;if(defaults)Object.assign(item,defaults);l.unshift(item);this._set(n,l);return item;},
-  _delete(n,id){const l=this._arr(n);this._set(n,l.filter(x=>x.id!==id));},
-
-  /* ========== 基础数据 ========== */
-  getProducts(){return this._arr('products');},
-  saveProduct(p){return this._save('products',p);},
-  deleteProduct(id){this._delete('products',id);},
-
-  getCustomers(){return this._arr('customers');},
-  saveCustomer(c){return this._save('customers',c);},
-  deleteCustomer(id){this._delete('customers',id);},
-  getCustomerById(id){return this._getById('customers',id);},
-
-  getInquiries(){return this._arr('inquiries');},
-  saveInquiry(i){return this._save('inquiries',i,{status:'跟进中'});},
-  deleteInquiry(id){this._delete('inquiries',id);},
-
-  getInquiryById(id){return this._getById('inquiries',id);},
-
-  /* ========== 常规申请子表单 ========== */
-
-  /* 外汇收款申请 */
-  getFxReceipts(){return this._arr('fx_receipts');},
-  saveFxReceipt(r){return this._save('fx_receipts',r,{depart_audit:'待审核',finance_audit:'待审核',ceo_approval:'待审批'});},
-  deleteFxReceipt(id){this._delete('fx_receipts',id);},
-
-  /* 证明文件申请 */
-  getCertDocs(){return this._arr('cert_docs');},
-  saveCertDoc(d){return this._save('cert_docs',d);},
-  deleteCertDoc(id){this._delete('cert_docs',id);},
-
-  /* 产品报价申请 */
-  getPriceQuotes(){return this._arr('price_quotes');},
-  savePriceQuote(q){return this._save('price_quotes',q,{depart_audit:'待审核',ceo_approval:'待审批'});},
-  deletePriceQuote(id){this._delete('price_quotes',id);},
-
-  /* 实单价格申请 */
-  getRealOrders(){return this._arr('real_orders');},
-  saveRealOrder(o){return this._save('real_orders',o,{depart_audit:'待审核',ceo_approval:'待审批'});},
-  deleteRealOrder(id){this._delete('real_orders',id);},
-
-  /* 实单价格申请-需借出产品 */
-  getRealOrdersBorrow(){return this._arr('real_orders_borrow');},
-  saveRealOrderBorrow(o){return this._save('real_orders_borrow',o,{depart_audit:'待审核',ceo_approval:'待审批'});},
-  deleteRealOrderBorrow(id){this._delete('real_orders_borrow',id);},
-
-  /* 退款申请（父表单，包含退佣金和售后） */
-  getRefunds(){return this._arr('refunds');},
-  saveRefund(r){return this._save('refunds',r,{status:'待处理'});},
-  deleteRefund(id){this._delete('refunds',id);},
-
-  /* ========== 审批动作（通用） ========== */
-  approve(stage,id,action,collection,stages){
-    const list=this._arr(collection);const idx=list.findIndex(x=>x.id===id);
-    if(idx<0)return null;const item=list[idx];
-    if(item[stage]!=='待审核'&&item[stage]!=='待审批')return null;
-    const isReject=action==='reject';
-    item[stage]=isReject?'已驳回':'已通过';
-    item.updated_at=Date.now();
-    // 通知
-    const sLabel=stages?.[stage]||this.STAGE_LABEL[stage];
-    if(isReject){
-      this.addNotification({type:'reject',title:'申请被驳回',body:`${sLabel}驳回了申请「${item.order_no||item.id}」`,link_id:id,link_tab:'general',for_role:'sales'});
-    }else{
-      const next=this.STAGE_NEXT[stage];
-      if(next){item[next]='待审核';const nr=this.STAGE_APPROVER[next];this.addNotification({type:'approve',title:'待审批',body:`${this.STAGE_LABEL[next]}待审批：申请「${item.order_no||item.id}」`,link_id:id,link_tab:'general',for_role:nr});}
-      else{this.addNotification({type:'done',title:'审批完成',body:`申请「${item.order_no||item.id}」所有审批已通过 ✓`,link_id:id,link_tab:'general',for_role:'all'});}
+  async init() {
+    if (this._ready) return;
+    // 检测后端是否可用
+    try {
+      const res = await fetch(this._api + '/login', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({username:'probe', password:'probe'})
+      });
+      if (res.status === 401) {
+        // API 存在\!
+        this._fallback = false;
+        console.log('📡 后端 API 模式');
+      } else {
+        this._fallback = true;
+        console.log('📄 localStorage 模式');
+      }
+    } catch {
+      this._fallback = true;
+      console.log('📄 localStorage 模式');
     }
-    list[idx]=item;this._set(collection,list);return item;
+    this._ready = true;
   },
 
-  /* ========== 导出导入 ========== */
-  exportAll(){return{products:this.getProducts(),customers:this.getCustomers(),inquiries:this.getInquiries(),fx_receipts:this.getFxReceipts(),cert_docs:this.getCertDocs(),price_quotes:this.getPriceQuotes(),real_orders:this.getRealOrders(),real_orders_borrow:this.getRealOrdersBorrow(),refunds:this.getRefunds()};},
-  importAll(data){const ks=['products','customers','inquiries','fx_receipts','cert_docs','price_quotes','real_orders','real_orders_borrow','refunds'];ks.forEach(k=>{if(data[k])this._set(k,data[k]);});},
-  clearAll(){['products','customers','inquiries','fx_receipts','cert_docs','price_quotes','real_orders','real_orders_borrow','refunds','notifications'].forEach(k=>localStorage.removeItem(this._key(k)));}
+  async _fetch(path, opts = {}) {
+    opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (this._token) opts.headers['Authorization'] = 'Bearer ' + this._token;
+    const res = await fetch(this._api + path, opts);
+    if (\!res.ok) throw new Error(res.statusText);
+    return res.json();
+  },
+
+  // ========== Auth ==========
+  async login(username, password) {
+    await this.init();
+    if (\!this._fallback) {
+      try {
+        const data = await this._fetch('/login', { method:'POST', body:JSON.stringify({username,password}) });
+        if (\!data.token) return null;
+        this._token = data.token;
+        this._user = data.user;
+        localStorage.setItem('aotu_token', data.token);
+        localStorage.setItem('aotu_user', JSON.stringify(data.user));
+        return data.user;
+      } catch { this._fallback = true; }
+    }
+    // localStorage fallback
+    const users = JSON.parse(localStorage.getItem('aotu_users') || '{}');
+    const user = Object.values(users).find(u => u.username === username);
+    if (\!user) return null;
+    const { default: bcrypt } = await import('https://cdn.jsdelivr.net/npm/bcryptjs@2/+esm');
+    if (\!bcrypt.compareSync(password, user.password)) return null;
+    this._user = user;
+    localStorage.setItem('aotu_user', JSON.stringify(user));
+    return user;
+  },
+
+  async register(username, password, name) {
+    await this.init();
+    if (\!this._fallback) {
+      try {
+        const user = await this._fetch('/register', { method:'POST', body:JSON.stringify({username,password,name}) });
+        return user;
+      } catch { return null; }
+    }
+    const users = JSON.parse(localStorage.getItem('aotu_users') || '{}');
+    if (Object.values(users).find(u => u.username === username)) return null;
+    const bcrypt = await import('https://cdn.jsdelivr.net/npm/bcryptjs@2/+esm');
+    const id = 'u_' + Date.now().toString(36);
+    const user = { id, username, password: bcrypt.hashSync(password), name: name||username, role: 'sales', avatar: '👤', created_at: Date.now() };
+    users[id] = user;
+    localStorage.setItem('aotu_users', JSON.stringify(users));
+    const { password: _, ...safe } = user;
+    return safe;
+  },
+
+  logout() {
+    this._token = ''; this._user = null;
+    localStorage.removeItem('aotu_token');
+    localStorage.removeItem('aotu_user');
+  },
+  isLoggedIn() { return \!\!this._user; },
+  currentUser() { return this._user; },
+
+  // ========== CRUD (通用) ==========
+  async _load(table) {
+    if (\!this._fallback) {
+      try { return await this._fetch('/' + table); } catch {}
+    }
+    const data = JSON.parse(localStorage.getItem('aotu_' + table) || '[]');
+    const user = this._user;
+    if (\!user) return data;
+    const perms = JSON.parse(localStorage.getItem('aotu_perms_raw') || '{}');
+    const p = perms[user.role];
+    if (p && (p[table] === 'all' || p[table] === true)) return data;
+    return data.filter(r => r.created_by === user.id || r.salesperson === user.name || r.applicant === user.name);
+  },
+
+  async _save(table, data) {
+    if (\!this._fallback) {
+      try { return await this._fetch('/' + table, { method:'POST', body:JSON.stringify(data) }); } catch {}
+    }
+    const all = JSON.parse(localStorage.getItem('aotu_' + table) || '[]');
+    const id = Date.now().toString(36) + Math.random().toString(36).substr(2,4);
+    const now = Date.now();
+    const item = { id, ...data, created_by: this._user?.id, created_at: now };
+    all.push(item);
+    localStorage.setItem('aotu_' + table, JSON.stringify(all));
+    if (table === 'fx_receipts') {
+      this._addNoti({ type:'approve', title:'待审批', body:'部门审核待处理:'+data.receipt_no, link_id:id, link_tab:'general', for_role:'dept_manager' });
+    }
+    return item;
+  },
+
+  async _update(table, id, data) {
+    if (\!this._fallback) {
+      try { return await this._fetch('/' + table + '/' + id, { method:'PUT', body:JSON.stringify(data) }); } catch {}
+    }
+    const all = JSON.parse(localStorage.getItem('aotu_' + table) || '[]');
+    const idx = all.findIndex(r => r.id === id);
+    if (idx >= 0) { all[idx] = { ...all[idx], ...data }; localStorage.setItem('aotu_' + table, JSON.stringify(all)); }
+    return { id, ...data };
+  },
+
+  async _delete(table, id) {
+    if (\!this._fallback) {
+      try { return await this._fetch('/' + table + '/' + id, { method:'DELETE' }); } catch {}
+    }
+    const all = JSON.parse(localStorage.getItem('aotu_' + table) || '[]');
+    localStorage.setItem('aotu_' + table, JSON.stringify(all.filter(r => r.id \!== id)));
+    return { success: true };
+  },
+
+  // ========== 各模块 ==========
+  getInquiries() { return this._load('inquiries'); },
+  saveInquiry(d) { return this._save('inquiries', d); },
+  updateInquiry(i, d) { return this._update('inquiries', i, d); },
+  deleteInquiry(i) { return this._delete('inquiries', i); },
+
+  getProducts() { return this._load('products'); },
+  saveProduct(d) { return this._save('products', d); },
+  updateProduct(i, d) { return this._update('products', i, d); },
+  deleteProduct(i) { return this._delete('products', i); },
+
+  getCustomers() { return this._load('customers'); },
+  saveCustomer(d) { return this._save('customers', d); },
+  updateCustomer(i, d) { return this._update('customers', i, d); },
+  deleteCustomer(i) { return this._delete('customers', i); },
+
+  getFxReceipts() { return this._load('fx_receipts'); },
+  saveFxReceipt(d) { return this._save('fx_receipts', d); },
+  deleteFxReceipt(i) { return this._delete('fx_receipts', i); },
+
+  getCertDocs() { return this._load('cert_docs'); },
+  saveCertDoc(d) { return this._save('cert_docs', d); },
+  deleteCertDoc(i) { return this._delete('cert_docs', i); },
+
+  getPriceQuotes() { return this._load('price_quotes'); },
+  savePriceQuote(d) { return this._save('price_quotes', d); },
+  deletePriceQuote(i) { return this._delete('price_quotes', i); },
+
+  getRealOrders() { return this._load('real_orders'); },
+  saveRealOrder(d) { return this._save('real_orders', d); },
+  deleteRealOrder(i) { return this._delete('real_orders', i); },
+
+  getRefunds() { return this._load('refunds'); },
+  saveRefund(d) { return this._save('refunds', d); },
+  deleteRefund(i) { return this._delete('refunds', i); },
+
+  getUsers() {
+    if (\!this._fallback) return this._fetch('/admin/users');
+    return Object.values(JSON.parse(localStorage.getItem('aotu_users') || '{}'))
+      .map(({password, ...u}) => ({...u, role: u.role||'sales'}));
+  },
+  async updateUserRole(id, role) {
+    if (\!this._fallback) return this._fetch('/admin/users/'+id+'/role', { method:'PUT', body:JSON.stringify({role}) });
+    const users = JSON.parse(localStorage.getItem('aotu_users') || '{}');
+    if (users[id]) { users[id].role = role; localStorage.setItem('aotu_users', JSON.stringify(users)); }
+  },
+  async deleteUser(id) {
+    if (\!this._fallback) return this._fetch('/admin/users/'+id, { method:'DELETE' });
+    const users = JSON.parse(localStorage.getItem('aotu_users') || '{}');
+    delete users[id]; localStorage.setItem('aotu_users', JSON.stringify(users));
+  },
+
+  getNotifications() { return this._load('notifications'); },
+  async getMyNotifications() {
+    const all = await this._load('notifications');
+    const user = this._user;
+    if (\!user) return all;
+    return all.filter(n => n.for_role === 'all' || n.for_role === user.role || user.role === 'admin');
+  },
+
+  async unreadCount() {
+    const all = await this.getMyNotifications();
+    return all.filter(n => \!n.read).length;
+  },
+  _addNoti(n) { return this._save('notifications', n); },
+  async addNotification(n) { return this._save('notifications', n); },
+  async removeNotification(linkId) {
+    const all = await this._load('notifications');
+    for (const n of all) {
+      if (n.link_id === linkId) await this._delete('notifications', n.id);
+    }
+  },
+
+  getPerms() {
+    if (\!this._fallback) return this._fetch('/admin/perms');
+    return JSON.parse(localStorage.getItem('aotu_perms') || '{}');
+  },
+  async updatePerm(role, key, val) {
+    if (\!this._fallback) return this._fetch('/admin/perms', { method:'PUT', body:JSON.stringify({role,key,val}) });
+    const perms = JSON.parse(localStorage.getItem('aotu_perms') || '{}');
+    if (perms[role]) { perms[role][key] = val; localStorage.setItem('aotu_perms', JSON.stringify(perms)); }
+  }
 };
